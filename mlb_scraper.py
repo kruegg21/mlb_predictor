@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import mechanize
 import cookielib
+import re
 # import concat_data as cd
 
 # gets player data from one url from basketballreference.com, each page only show 100 entries of player data
@@ -162,41 +163,8 @@ def scrape_new_data(starting_year, ending_year, browser, only_pitching_data):
 					accumulator.to_csv('DataSets/RawData/Pitching/' + team_id + '_vs_' + str(year) + '_Pitching_' + hand + '_new.csv', index = False)
 	######################################################################
 
-# gets data on the start time of games from sportsdatabase.com
-# this website only has start time data going back to the 2004 season
-def get_start_time_data(browser):
-	# hard coded URL
-	url = 'http://b2b.sportsdatabase.com/mlb/query?output=default&su=1&ou=1&sdql=date%2Cteam%2Co%3Astart+time%40scored+first%3D1&submit=++S+D+Q+L+%21++'
-	
-	#load HTML data from page into pagetext 
-	page = browser.visit(url)
-	pagetext = browser.html
 
-	# make some soup
-	soup = BeautifulSoup(pagetext, 'html.parser')
-
-	# make empty dataframe
-	df = pd.DataFrame(columns = ['Date','Team','StartTime'], index = xrange(len(soup.find_all('tr'))))
-
-	row = 0
-	for element in soup.find_all('tr'):
-		subelements = element.find_all('td')
-		if len(subelements) == 3:
-			if subelements[0].string is not None:
-				df.iat[row, 0] = subelements[0].string.lstrip('\n').rstrip('\n')
-				df.iat[row, 1] = subelements[1].string.lstrip('\n').rstrip('\n')
-				df.iat[row, 2] = subelements[2].string.lstrip('\n').rstrip('\n')
-				row += 1
-
-	df = df[pd.notnull(df.Date)]
-
-	df['Date'].map(lambda x: x.lstrip('\n').rstrip('\n'))
-	df['Team'].map(lambda x: x.lstrip('\n').rstrip('\n'))
-	df['StartTime'].map(lambda x: x.lstrip('\n').rstrip('\n'))
-
-	df.to_csv('testtest.csv')
-
-# downloadas regular season batting order from baseballreference.com
+# downloads regular season batting order from baseballreference.com
 def get_batting_order_data(starting_year, ending_year):
 	team_list = ['TBD', 'TEX', 'ANA', 'STL', 'ATL', 'FLA','HOU', 'ARI', 'NYY', 
 			 'BAL', 'CHW', 'DET', 'CLE', 'BOS', 'SDP', 'LAD','CHC', 'MIL', 
@@ -322,6 +290,9 @@ def get_team_schedules(starting_year, ending_year):
 	print len(df.index)
 
 # get the start time data for all games in 'team_schedules.csv' file
+
+# this process is extremely slow, make sure to babysit it and break
+# the files into chunks if necessary
 def get_start_time_data():
 	# all the team IDs from baseballreference.com
 	team_list = ['TBA', 'OAK', 'NYA', 'KCA', 'BAL', 'TEX',
@@ -331,15 +302,11 @@ def get_start_time_data():
 				 'CLE', 'DET', 'PIT', 'CIN', 'NYN', 'WAS', 'MON'] 	   
 	
 	# read 'team_schedules.csv' file
-	team_schedules = pd.read_csv('team_schedules.csv')
-
-	team_schedules = team_schedules.iloc[24944:25277,:]
+	team_schedules = pd.read_csv('DataSets/RawData/TeamSchedules/team_schedules.csv')
 	team_schedules.index = xrange(len(team_schedules.index))
-	print team_schedules
 
-
-	# create empty DataFrame
-	col_names = ['Team', 'Date', 'StartTime', 'FieldName']
+	# check if we have partially scraped data
+	col_names = ['Team', 'Date', 'StartTime', 'FieldName', 'HomePlateUmpire']
 	df = pd.DataFrame(columns = col_names, index = xrange(len(team_schedules.index)))
 
 	# periodically save every number of rows in case of internet timeout
@@ -354,7 +321,6 @@ def get_start_time_data():
 		url = 'http://www.baseball-reference.com/boxes/' + team + '/' + \
 			   team + date + str(int(double_header)) + '.shtml'
 
-		print url
 		#load HTML data from page into pagetext 
 		page = urllib.urlopen(url)
 		pagetext = page.read()
@@ -364,73 +330,46 @@ def get_start_time_data():
 
 		elements = soup.findAll("div", { "class" : "bold_text float_left"})
 		if len(elements) is not 0:
+			# get team date and field name
 			df.iat[row,0] = team
 			df.iat[row,1] = date
 			df.iat[row,2] = elements[0].string[-7:].lstrip()
 
+			# get umpire data
+			umpire_data = soup.find("div", {"id": "Umpires"})
+			result = re.search('HP - (.*), 1B', umpire_data.text)
+			df.iat[row,4] = result.group(1)
+
 			# if there is no information available for stadium, make 'FieldName' unknown
 			if elements[1].string is not None:
 				df.iat[row,3] = elements[1].string[2:]
-				print elements[0].string[-7:].lstrip()
-				print elements[1].string[2:]
 			else:
 				df.iat[row,3] = 'Unknown'
-				print elements[0].string[-7:].lstrip()
-				print 'Unknown'
 			row += 1
 			periodic_save_counter += 1
 
-		if periodic_save_counter > 200:
+		if periodic_save_counter > 20:
 			print "SAVED AT ROW:"
 			print row
-			df.to_csv('start_time_data5.csv', index = False)
+			df = clean_start_time_data(df)
+			df.to_csv('DataSets/RawData/StartTimeData/start_time_data1.csv', index = False)
 			periodic_save_counter = 0
-	df.to_csv('start_time_data5.csv', index = False)
+	df = clean_start_time_data(df)
+	df.to_csv('DataSets/RawData/StartTimeData/start_time_data1.csv', index = False)
 
-	'''
-	start_time_data = pd.DataFrame()
-	for team in team_list:
-		for year in year_list:
-			# after every year, concat with large DataFrame
-			col_names = ['Team', 'Date', 'StartTime', 'FieldName']
-			df = pd.DataFrame(columns = col_names, index = xrange(200))
-			row = 0
-			for month in month_list:
-				if month < 10:
-					month = '0' + str(month)
-				else:
-					month = str(month)
-				for day in day_list:
-					for double_header in [0,1,2]:
-						if day < 10:
-							day = '0' + str(day)
-						else:
-							day = str(day)
-						print team, year, month, day
-						# build URL
-						url = 'http://www.baseball-reference.com/boxes/' + team + '/' + \
-							   team + str(year) + month + day + str(double_header) + '.shtml'	
+# changes '7:30 pm' format to '7:30PM'
+def clean_start_time_data(df):
+	start_time = df.StartTime
 
-						#load HTML data from page into pagetext 
-						page = urllib.urlopen(url)
-						pagetext = page.read()
+	# string operations
+	start_time = start_time.str.replace(" ", "")
+	start_time = start_time.str.replace("p", "P")
+	start_time = start_time.str.replace("m", "M")
+	start_time = start_time.str.replace("a", "A")
 
-						# make some soup
-						soup = BeautifulSoup(pagetext, 'html.parser')
-
-						elements = soup.findAll("div", { "class" : "bold_text float_left"})
-						if len(elements) is not 0:
-							df.iat[row,0] = team
-							df.iat[row,1] = str(year) + month + day
-							df.iat[row,2] = elements[0].string[-7:].lstrip()
-							df.iat[row,3] = elements[1].string[2:]
-							print elements[0].string[-7:].lstrip()
-							print elements[1].string[2:]
-							row += 1
-			df = df[pd.notnull(df.Team)]
-			start_time_data = pd.concat([start_time_data, df])
-			start_time_data.to_csv('testtesttes.csv', index = False)
-	'''
+	# return
+	df['StartTime'] = start_time
+	return df
 
 def get_team_data(starting_year, ending_year, browser):
 	team_list = ['TBD', 'TEX', 'ANA', 'STL', 'ATL', 'FLA','HOU', 'ARI', 'NYY', 
@@ -484,78 +423,55 @@ def get_team_data(starting_year, ending_year, browser):
 				reached_starting_date = 1
 				accumulator.to_csv('DataSets/RawData/' + team_id + '_vs_' + home_away + '_' + str(year) + '_Batting_' + hand + '_new.csv', index = False)
 
+# converts from crappy excel date format to %Y-%m-%d format
+def convert_excel_date_format(file_name, date_column):
+	df = pd.read_csv(file_name, parse_dates = [date_column])
+	df.to_csv(file_name, date_format= '%m-%d-%Y', index = False)
+
 if __name__ == "__main__":
-	# USE CHROME BROWSER FOR FACEBOOK LOGIN FOR BASEBALLREFERENCE.COM
-	from splinter import Browser
-	browser= Browser('chrome')
+	# SPECIFY WHICH DATA WE WANT TO SCRAPE
+	starting_year = 2004
+	ending_year = 2015
+	pitching_data = 0
+	batting_data = 0
+	start_time = 1
+	team_schedules = 0
+	batting_order = 0
 
-	user_email = raw_input("enter users email address ")
-	user_pass = raw_input("enter users password ")
-	browser.visit('http://www.facebook.com')
+	if (pitching_data == 1) | (batting_data == 1):
+		# USE CHROME BROWSER FOR FACEBOOK LOGIN FOR BASEBALLREFERENCE.COM
+		from splinter import Browser
+		browser= Browser('chrome')
 
-	browser.fill('email', user_email)
-	browser.fill('pass', user_pass)
+		user_email = raw_input("enter users email address ")
+		user_pass = raw_input("enter users password ")
+		browser.visit('http://www.facebook.com')
 
-	#Here is what I made a slight change
-	button = browser.find_by_id('loginbutton')
-	button.click()
+		browser.fill('email', user_email)
+		browser.fill('pass', user_pass)
 
-	#I didn't find the page saving function for facebook using Splinter but as an alternative I found screenshot feature. 
+		#Here is what I made a slight change
+		button = browser.find_by_id('loginbutton')
+		button.click()
 
-	# The site we will navigate into, handling it's session
-	browser.visit('http://www.baseball-reference.com/my/auth.cgi?return_to=http://www.baseball-reference.com/')
-	browser.click_link_by_href('/my/auth.cgi?do=oauth_login&service=facebook&return_to=')
-	# print response.read()
-	# scrape_new_data(starting_year, ending_year, browser, only_pitching_data)
-	scrape_new_data(2010, 2015, browser, 1)
-	'''
+		#I didn't find the page saving function for facebook using Splinter but as an alternative I found screenshot feature. 
 
-	get_start_time_data()
+		# The site we will navigate into, handling it's session
+		browser.visit('http://www.baseball-reference.com/my/auth.cgi?return_to=http://www.baseball-reference.com/')
+		browser.click_link_by_href('/my/auth.cgi?do=oauth_login&service=facebook&return_to=')
+		# print response.read()
+		# scrape_new_data(starting_year, ending_year, browser, only_pitching_data)
+		if (pitching_data == 1) & (batting_data == 0):
+			scrape_new_data(starting_year, ending_year, browser, 1)
+		else:
+			scrape_new_data(starting_year, ending_year, browser, 0)
+	
+	if start_time == 1:
+		get_start_time_data()
 
+	if team_schedules == 1:
+		get_team_schedules(2004, 2015)
+		convert_excel_date_format('team_schedules.csv', 0)
 
-
-
-	def convert_excel_date_format(file_name, date_column):
-		df = pd.read_csv(file_name, parse_dates = [date_column])
-		df.to_csv(file_name, date_format= '%m-%d-%Y', index = False)
-
-	convert_excel_date_format('team_schedules.csv', 0)
-
-	'''
-
-	'''
-	df1 = pd.read_csv('start_time_data.csv')
-	df2 = pd.read_csv('start_time_data2.csv')
-	df3 = pd.read_csv('start_time_data3.csv')
-	df4 = pd.read_csv('start_time_data4.csv')
-	df5 = pd.read_csv('start_time_data5.csv')
-
-	df1 = df1[pd.notnull(df1.Team)]
-	df2 = df2[pd.notnull(df2.Team)]
-	df3 = df3[pd.notnull(df3.Team)]
-	df4 = df4[pd.notnull(df4.Team)]
-	df5 = df5[pd.notnull(df5.Team)]
-
-	print len(df1.index)
-	print len(df2.index)
-	print len(df3.index)
-	print len(df4.index)
-	print len(df5.index)
-
-	df = pd.concat([df1, df2, df3, df4, df5])
-
-	for i in df['Team'].unique():
-		print i
-		print len(df[df['Team'] == i])
-		print '\n'
-
-	print len(df.index)
-
-	df.to_csv('start_time_data_full.csv')
-	'''
-
-
-	'''
-	get_team_schedules(2004, 2015)
-
-	'''
+	if batting_order == 1:
+		get_batting_order_data(starting_year, ending_year)
