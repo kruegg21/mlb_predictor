@@ -4,7 +4,14 @@ from datetime import datetime
 import pyowm
 import numpy as np
 
+df = pd.read_csv('testtest.csv')
 
+df['ParsedDate'] = pd.to_datetime(df.Date, format = "%Y%m%d")
+
+df.StartTime.mod(100)
+df.StartTime.div(100).apply(np.floor)
+
+'''
 import rpy2.robjects as robjects
 # R package names
 packnames = ('weatherData')
@@ -32,6 +39,7 @@ if not have_tutorial_packages:
         utils.install_packages(StrVector(packnames_to_install))
 
 print 'here'
+'''
 
 '''
 df = pd.read_csv('combined_batting_player_test.csv')
