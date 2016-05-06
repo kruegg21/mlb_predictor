@@ -28,7 +28,6 @@ def get_page_data(url):
 	    next2 = next.nextSibling
 	    if next2 and isinstance(next2,Tag) and next2.name == 'br':
 	        text = str(next).strip()
-	        print text
 	        if text:
 				col = 0
 				for i in text.split(","):
@@ -51,20 +50,27 @@ def find_closest_time(df, time):
 
 	return (abs(time_column - mid)).idxmin()	
 
+# gets weather data for all games in 'start_time_data_full.csv' file
 if __name__ == "__main__":
 	df = pd.read_csv('DataSets/RawData/StartTimeData/start_time_data_full.csv')
 	# translate each team to airport code	
 	airport_translation = {'TBA' : 'KTPA', 'OAK' : 'KOAK', 'NYA' : 'KLGA',
 						   'KCA' : 'KMCI', 'BAL' : 'KBWI', 'TEX' : 'KGKY',
-						   'CHN' : 'KSFO', 'LAN' : 'KSFO', 'PHI' : 'KSFO',
-						   'SDN' : 'KSFO', 'SLN' : 'KSFO', 'ANA' : 'KSFO',
-	 					   'SEA' : 'KSFO', 'ATL' : 'KSFO', 'COL' : 'KSFO',
-	 					   'FLO' : 'KSFO', 'HOU' : 'KSFO', 'CHA' : 'KSFO',
-	 					   'MIN' : 'KSFO', 'TOR' : 'KSFO', 'ARI' : 'KSFO',
-	 					   'SFN' : 'KSFO', 'BOS' : 'KSFO', 'CLE' : 'KSFO',
-	 					   'DET' : 'KSFO', 'PIT' : 'KSFO', 'NYN' : 'KSFO',
-	 					   'MON' : 'KSFO', 'MIL' : 'KSFO', 'CIN' : 'KSFO',
-	 					   'WAS' : 'KSFO', 'MIA' : 'KSFO'}
+						   'CHN' : 'KORD', 'LAN' : 'KLAX', 'PHI' : 'KPHL',
+						   'SDN' : 'KSAN', 'SLN' : 'KSTL', 'ANA' : 'KSNA',
+	 					   'SEA' : 'KSEA', 'ATL' : 'KATL', 'COL' : 'KDEN',
+	 					   'FLO' : 'KMIA', 'HOU' : 'KIAH', 'CHA' : 'KMDW',
+	 					   'MIN' : 'KMSP', 'TOR' : 'KYYZ', 'ARI' : 'KPHX',
+	 					   'SFN' : 'KSFO', 'BOS' : 'KBOS', 'CLE' : 'KCLE',
+	 					   'DET' : 'KDTW', 'PIT' : 'KPIT', 'NYN' : 'KLGA',
+	 					   'MON' : 'KYUL', 'MIL' : 'KMKE', 'CIN' : 'KCVG',
+	 					   'WAS' : 'KDCA', 'MIA' : 'KMIA'}
+
+	 # create empty DataFrame to hold weather data
+	col_names = ['Team', 'Date', 'StartTime', 'LocalTime', 'TempF', 'DewPointF', 'Humidity', 'SeaLevelPressureIn',
+	 			 'VisibilityMPH', 'WindDirection', 'WindSpeedMPH', 'GustSpeedMPH',
+				 'PrecipitationIn', 'Events', 'Conditions', 'WindDirDegrees', 'DateUTC']
+	weather_data = pd.DataFrame(index = range(len(df.index)), columns = col_names)
 
 	for i in xrange(len(df.index)):
 		airport = airport_translation[df.loc[i,'Team']]
@@ -77,10 +83,30 @@ if __name__ == "__main__":
 		if day[0] == '0':
 			day = day[1]
 		start_time = df.loc[i,'StartTime']
-		print airport, year, month, day, start_time
 
 		# create URL
 		url = 'https://www.wunderground.com/history/airport/' + airport + '/' + str(year) + \
-			  '/' str(month) + '/' + str(day) + '/DailyHistory.html?format=1'
-		get_page_data(url)
+			  '/' + str(month) + '/' + str(day) + '/DailyHistory.html?format=1'
+
+		# gather weather data for particular team and day
+		day_weather = get_page_data(url)
+
+		# get row index closest to middle of game
+		row = find_closest_time(day_weather, df.loc[i,'StartTime'])
+
+		# add in team, date, and start time data
+		weather_data.iloc[i,0] = df.loc[i,'Team']
+		weather_data.iloc[i,1] = str(int(df.loc[i,'Date']))
+		weather_data.iloc[i,2] = df.loc[i,'StartTime']
+
+		# parse weather data
+		hourly_weather_data = day_weather.loc[row,:]
+		for j in xrange(len(day_weather.columns)):
+			weather_data.iloc[i,j+3] = hourly_weather_data.iloc[j]
+
+		# dump
+		weather_data_shrunk = weather_data[pd.notnull(weather_data.LocalTime)]
+		weather_data_shrunk.to_csv('DataSets/RawData/WeatherData/weather_data_full.csv', index = False)
+
+
 		
