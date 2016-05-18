@@ -1,8 +1,30 @@
 import pandas as pd
 
+# combines umpire, date, and weather data
+def combine_game_stats():
+	start_time_data = pd.read_csv('DataSets/RawData/StartTimeData/start_time_data.csv')
+	weather_data = pd.read_csv('DataSets/RawData/WeatherData/weather_data_full.csv')
+	batting_order_data = pd.read_csv('DataSets/RawData/BattingOrder/batting_order.csv')
+
+	print "NUMBER OF START TIME ROWS"
+	print len(start_time_data.index)
+	print "NUMBER OF WEATHER ROWS"
+	print len(weather_data.index)
+
+	df = pd.merge(start_time_data, weather_data, on = ['Team', 'Date', 'StartTime'], how = 'outer')
+
+	df_missing_start_time = df[pd.isnull(df.FieldName)]
+	df_missing_start_time.to_csv('missing_start_time.csv', index = False)
+
+	df_missing_weather = df[pd.isnull(df.TempF)]
+	df_missing_weather.to_csv('missing_weather.csv', index = False)
+	print len(df.index)
+
+	df.to_csv('full_set.csv', index = False)
+
+
 # combines the pieces of the scraped chunks of batting and pitching data 
 # and dumps them to 'full_batting_dataset.csv' and 'full_pitching_dataset.csv'
-
 def build_from_scratch(start_year):
 	# combine chunks of batting datasets
 	df = pd.DataFrame()
@@ -47,3 +69,6 @@ def build_from_scratch(start_year):
 
 				df = pd.concat([df, new_frame])
 	df.to_csv('full_pitching_dataset.csv', index = False)
+
+if __name__ == '__main__':
+	combine_game_stats()

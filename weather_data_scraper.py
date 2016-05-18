@@ -38,6 +38,8 @@ def get_page_data(url):
 	df = df[pd.notnull(df.LocalTime)]
 	return df
 
+###########################################################################################
+# HELPER FUNCTIONS
 # finds row in DataFrame with time closest to time in '%H:%M%p' format and returns
 # the index of that row
 def find_closest_time(df, time):
@@ -50,9 +52,25 @@ def find_closest_time(df, time):
 
 	return (abs(time_column - mid)).idxmin()	
 
+def combine_weather_data(n):
+	df = pd.DataFrame()
+	for i in xrange(n):
+		temp = pd.read_csv('DataSets/RawData/WeatherData/weather_data_full' + str(i+1) + '.csv')
+		temp = temp[pd.notnull(temp.Date)]
+		df = pd.concat([df, temp])
+	df.to_csv('DataSets/RawData/WeatherData/weather_data_full.csv', index = False)
+
+###########################################################################################
+
 # gets weather data for all games in 'start_time_data_full.csv' file
+# REQUIRES SOME BABYSITTING. Takes ~10 hours for 10 years of data 
+
+# NOTES:
+# data for KGKY on 4-13-2004 through 4-15-2004 is unavailable
 if __name__ == "__main__":
-	df = pd.read_csv('DataSets/RawData/StartTimeData/start_time_data_full.csv')
+	combine_weather_data(4)
+	'''
+	df = pd.read_csv('DataSets/RawData/StartTimeData/start_time_data.csv')
 	# translate each team to airport code	
 	airport_translation = {'TBA' : 'KTPA', 'OAK' : 'KOAK', 'NYA' : 'KLGA',
 						   'KCA' : 'KMCI', 'BAL' : 'KBWI', 'TEX' : 'KGKY',
@@ -60,10 +78,10 @@ if __name__ == "__main__":
 						   'SDN' : 'KSAN', 'SLN' : 'KSTL', 'ANA' : 'KSNA',
 	 					   'SEA' : 'KSEA', 'ATL' : 'KATL', 'COL' : 'KDEN',
 	 					   'FLO' : 'KMIA', 'HOU' : 'KIAH', 'CHA' : 'KMDW',
-	 					   'MIN' : 'KMSP', 'TOR' : 'KYYZ', 'ARI' : 'KPHX',
+	 					   'MIN' : 'KMSP', 'TOR' : 'CYYZ', 'ARI' : 'KPHX',
 	 					   'SFN' : 'KSFO', 'BOS' : 'KBOS', 'CLE' : 'KCLE',
 	 					   'DET' : 'KDTW', 'PIT' : 'KPIT', 'NYN' : 'KLGA',
-	 					   'MON' : 'KYUL', 'MIL' : 'KMKE', 'CIN' : 'KCVG',
+	 					   'MON' : 'CYUL', 'MIL' : 'KMKE', 'CIN' : 'KCVG',
 	 					   'WAS' : 'KDCA', 'MIA' : 'KMIA'}
 
 	 # create empty DataFrame to hold weather data
@@ -72,7 +90,7 @@ if __name__ == "__main__":
 				 'PrecipitationIn', 'Events', 'Conditions', 'WindDirDegrees', 'DateUTC']
 	weather_data = pd.DataFrame(index = range(len(df.index)), columns = col_names)
 
-	for i in xrange(len(df.index)):
+	for i in xrange(24842, len(df.index)):
 		airport = airport_translation[df.loc[i,'Team']]
 		full_date = str(df.loc[i,'Date'])
 		year = full_date[:4]
@@ -106,7 +124,6 @@ if __name__ == "__main__":
 
 		# dump
 		weather_data_shrunk = weather_data[pd.notnull(weather_data.LocalTime)]
-		weather_data_shrunk.to_csv('DataSets/RawData/WeatherData/weather_data_full.csv', index = False)
-
-
+		weather_data_shrunk.to_csv('DataSets/RawData/WeatherData/weather_data_full4.csv', index = False)
+		'''
 		

@@ -40,7 +40,6 @@ def get_player_page_data(url, feature_names, browser):
 
 # dumps to csv files in chunks divided by each team, home/away, year, and batting hand
 # to get around 1500 row limit for baseballreference.com
-
 def scrape_new_data(starting_year, ending_year, browser, only_pitching_data):
 	######################################################################	
 	# SCRAPE BATTING DATA
@@ -48,9 +47,9 @@ def scrape_new_data(starting_year, ending_year, browser, only_pitching_data):
 	feature_names = ['Rank','PlayerID','Player','Date','Team','Opp','Result','PA','AB','R','H',
 					 '2B','3B','HR','RBI','BB','IBB','SO','HBP','SH','SF','ROE','GDP',
 					 'SB','CS','WPA','RE24','aLI','BOP','Pos','DK','FD']
-	team_list = ['TBD', 'TEX', 'ANA', 'STL', 'ATL', 'FLA','HOU', 'ARI', 'NYY', 
-				 'BAL', 'CHW', 'DET', 'CLE', 'BOS', 'SDP', 'LAD','CHC', 'MIL', 
-				 'KCR', 'MIN', 'NYM', 'WSN', 'PHI', 'PIT','CIN', 'OAK','SEA', 
+	team_list = ['TBD', 'TEX', 'ANA', 'STL', 'ATL', 'FLA', 'HOU', 'ARI', 'NYY', 
+				 'BAL', 'CHW', 'DET', 'CLE', 'BOS', 'SDP', 'LAD', 'CHC', 'MIL', 
+				 'KCR', 'MIN', 'NYM', 'WSN', 'PHI', 'PIT', 'CIN', 'OAK', 'SEA', 
 				 'COL', 'SFG', 'TOR']
 	home_away_list = ['H','V']
 	batting_hand_list = ['R','L','B']
@@ -167,9 +166,9 @@ def scrape_new_data(starting_year, ending_year, browser, only_pitching_data):
 # downloads regular season batting order from baseballreference.com
 def get_batting_order_data(starting_year, ending_year):
 	team_list = ['TBD', 'TEX', 'ANA', 'STL', 'ATL', 'FLA','HOU', 'ARI', 'NYY', 
-			 'BAL', 'CHW', 'DET', 'CLE', 'BOS', 'SDP', 'LAD','CHC', 'MIL', 
-			 'KCR', 'MIN', 'NYM', 'WSN', 'PHI', 'PIT','CIN', 'OAK','SEA', 
-			 'COL', 'SFG', 'TOR']
+			 	 'BAL', 'CHW', 'DET', 'CLE', 'BOS', 'SDP', 'LAD','CHC', 'MIL', 
+			 	 'KCR', 'MIN', 'NYM', 'WSN', 'PHI', 'PIT','CIN', 'OAK','SEA', 
+			 	 'COL', 'SFG', 'TOR']
 	year_list = xrange(starting_year, ending_year + 1)
 
 	# create empty DataFrame
@@ -215,10 +214,7 @@ def get_batting_order_data(starting_year, ending_year):
 					row += 1
 
 			# remove empty rows
-			df = df[pd.notnull(df.Team)]
-
-			# add newly scraped data to full set
-			batting_order_data = pd.concat([batting_order_data, df])
+			batting_order_data = df[pd.notnull(df.Team)]
 
 			# dump
 			batting_order_data.to_csv('DataSets/RawData/BattingOrder/' + team + str(year) + 'Batting_Order.csv' , index = False)
@@ -312,12 +308,17 @@ def get_start_time_data():
 	# periodically save every number of rows in case of internet timeout
 	periodic_save_counter = 0
 	row = 0
-	for i in team_schedules.index:
+	for i in team_schedules.index[:]:
 		date = team_schedules.iat[i,0]
 		team = team_schedules.iat[i,1]
+
+		# get double header indicator
 		double_header = team_schedules.iat[i,2]
+		if (team_schedules.iat[i,0] == team_schedules.iat[i-1,0]):
+			double_header = 2
 
 		date = str(date)[-4:] + str(date)[:2] + str(date)[3:5]
+
 		url = 'http://www.baseball-reference.com/boxes/' + team + '/' + \
 			   team + date + str(int(double_header)) + '.shtml'
 
@@ -347,15 +348,15 @@ def get_start_time_data():
 				df.iat[row,3] = 'Unknown'
 			row += 1
 			periodic_save_counter += 1
-
+		print team, date
 		if periodic_save_counter > 20:
 			print "SAVED AT ROW:"
-			print row
+			print i
 			df = clean_start_time_data(df)
-			df.to_csv('DataSets/RawData/StartTimeData/start_time_data1.csv', index = False)
+			df.to_csv('DataSets/RawData/StartTimeData/start_time_data5.csv', index = False)
 			periodic_save_counter = 0
 	df = clean_start_time_data(df)
-	df.to_csv('DataSets/RawData/StartTimeData/start_time_data1.csv', index = False)
+	df.to_csv('DataSets/RawData/StartTimeData/start_time_data5.csv', index = False)
 
 # changes '7:30 pm' format to '7:30PM'
 def clean_start_time_data(df):
@@ -423,10 +424,38 @@ def get_team_data(starting_year, ending_year, browser):
 				reached_starting_date = 1
 				accumulator.to_csv('DataSets/RawData/' + team_id + '_vs_' + home_away + '_' + str(year) + '_Batting_' + hand + '_new.csv', index = False)
 
+########################################################################################
+# HELPER FUNCTIONS
 # converts from crappy excel date format to %Y-%m-%d format
 def convert_excel_date_format(file_name, date_column):
 	df = pd.read_csv(file_name, parse_dates = [date_column])
 	df.to_csv(file_name, date_format= '%m-%d-%Y', index = False)
+
+# combines divided up files of start time data into one file
+# n : number of separate files
+def combine_start_time_data(n):
+	df = pd.DataFrame()
+	for i in xrange(n):
+		temp = pd.read_csv('DataSets/RawData/StartTimeData/start_time_data' + str(i+1) + '.csv')
+		temp = temp[pd.notnull(temp.Date)]
+		df = pd.concat([df, temp])
+	df.to_csv('DataSets/RawData/StartTimeData/start_time_data.csv', index = False)
+
+
+# combines divided files of batting order data into one file
+def combine_batting_order_data(start_year, end_year):
+	df = pd.DataFrame()
+	team_list = ['TBD', 'TEX', 'ANA', 'STL', 'ATL', 'FLA','HOU', 'ARI', 'NYY', 
+			 	 'BAL', 'CHW', 'DET', 'CLE', 'BOS', 'SDP','LAD', 'CHC', 'MIL', 
+			 	 'KCR', 'MIN', 'NYM', 'WSN', 'PHI', 'PIT','CIN', 'OAK', 'SEA', 
+			 	 'COL', 'SFG', 'TOR']
+	for year in xrange(start_year, end_year + 1):
+		for team in team_list:
+			temp = pd.read_csv('DataSets/RawData/BattingOrder/' + team + str(year) + 'Batting_Order.csv')
+			print len(temp.index)
+			df = pd.concat([df, temp])
+	df.to_csv('DataSets/RawData/BattingOrder/batting_order.csv', index = False)
+########################################################################################
 
 if __name__ == "__main__":
 	# SPECIFY WHICH DATA WE WANT TO SCRAPE
@@ -475,3 +504,4 @@ if __name__ == "__main__":
 
 	if batting_order == 1:
 		get_batting_order_data(starting_year, ending_year)
+
